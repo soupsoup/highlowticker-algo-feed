@@ -27,3 +27,25 @@ def test_convenience_strategy_handler_classifies(monkeypatch):
 def test_convenience_notify_send_is_defined():
     mod = _load(EX / "notify.py", "ex_notify")
     assert callable(mod.send)
+
+
+def test_convenience_notify_filters_highs(monkeypatch):
+    monkeypatch.setenv("HLT_MILESTONE", "5")
+    monkeypatch.setenv("HLT_SYMBOLS", "aapl, msft")
+    mod = _load(EX / "notify.py", "ex_notify_filter")
+    assert mod.is_alert(make_event(symbol="AAPL", event="new_high", high_count=5))
+    assert mod.is_alert(make_event(symbol="MSFT", event="new_high_and_low", high_count=6))
+    assert not mod.is_alert(make_event(symbol="AAPL", event="new_high", high_count=4))
+    assert not mod.is_alert(make_event(symbol="TSLA", event="new_high", high_count=9))
+    assert not mod.is_alert(make_event(symbol="AAPL", event="new_low", high_count=9))
+
+
+def test_convenience_notify_alert_survives_send_failure(monkeypatch, capsys):
+    mod = _load(EX / "notify.py", "ex_notify_fail")
+
+    def boom(text):
+        raise OSError("discord down")
+
+    monkeypatch.setattr(mod, "send", boom)
+    mod.alert(make_event(symbol="AAPL", event="new_high", high_count=5))
+    assert "send failed for AAPL" in capsys.readouterr().out
